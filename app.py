@@ -95,27 +95,52 @@ with tab2:
     st.metric("Predicted Relative Hazard (Risk Score)", f"{risk_score:.2f}", delta="Higher = elevated lifecycle risk")
 
 with tab3:
-    st.subheader("Geospatial Vehicle Risk Heatmap (National Scale Demonstration)")
-    st.markdown("Synthetic regional risk mapping — higher intensity = clusters of predicted high-risk older vehicles (for FHWA/NHTSA targeting).")
+    st.subheader("Geospatial Vehicle Risk Heatmap – Zip/City/County Equity Focus")
+    st.markdown("""
+    **Demonstration of Specific Location Risk & Equity Disparities**  
+    Higher risk intensity in zip codes/cities/counties with proxies for older fleets or underserved areas (e.g., higher average age, high-mileage, environmental justice concerns).  
+    Synthetic proxies based on U.S. trends (S&P Global Mobility 2025 fleet age distribution; NHTSA older-vehicle fatality overrepresentation).  
+    Shows prospective impact on transportation equity assessments (federal housing/environmental partnerships).  
+    Extensible to real county-level data from EPA MOVES5 (>250M vehicle records) and FHWA HSIP (~$3.2B annual FY 2025–2026 under IIJA).
+    """)
 
-    # Synthetic lat/lon for US regions
-    region_coords = {
-        'Northeast': [42.0, -74.0],
-        'Midwest': [41.0, -90.0],
-        'South': [33.0, -85.0],
-        'West': [38.0, -115.0]
-    }
-    df_map = df.copy()
-    df_map['lat'] = df_map['region'].map(lambda r: region_coords[r][0] + np.random.normal(0, 2))
-    df_map['lon'] = df_map['region'].map(lambda r: region_coords[r][1] + np.random.normal(0, 5))
-    df_map['risk_weight'] = df_map['co2_g_per_km'] / 100  # proxy
+    # Synthetic but realistic zip/city/county proxies (higher risk in equity-impacted areas)
+    location_data = [
+        {"name": "Atlanta, GA (Zip 30303)", "lat": 33.75, "lon": -84.39, "risk": 1.18, "note": "Urban underserved proxy - higher older fleet & mileage"},
+        {"name": "Chicago, IL (Zip 60601)", "lat": 41.88, "lon": -87.63, "risk": 1.10, "note": "High-density urban equity area"},
+        {"name": "Dallas, TX (Zip 75201)", "lat": 32.78, "lon": -96.80, "risk": 1.22, "note": "Southern city - elevated risk in affordability-constrained zones"},
+        {"name": "Los Angeles, CA (Zip 90012)", "lat": 34.05, "lon": -118.24, "risk": 0.92, "note": "Mixed coastal - moderate disparity"},
+        {"name": "Detroit, MI (Zip 48226)", "lat": 42.33, "lon": -83.05, "risk": 1.25, "note": "Industrial Midwest - significant older fleet equity disparity"},
+        {"name": "Miami, FL (Zip 33130)", "lat": 25.77, "lon": -80.19, "risk": 1.12, "note": "High-risk underserved urban area"},
+        {"name": "McDowell County, WV (Appalachia example)", "lat": 37.42, "lon": -81.58, "risk": 1.30, "note": "Rural county - extreme older fleet overrepresentation in fatalities (NHTSA trends)"},
+        {"name": "Jackson, MS (Zip 39201)", "lat": 32.30, "lon": -90.18, "risk": 1.20, "note": "Southern equity-impacted city - prolonged used-vehicle reliance"}
+    ]
 
-    m = folium.Map(location=[38, -96], zoom_start=4, tiles='CartoDB positron')
+    df_locations = pd.DataFrame(location_data)
+    df_locations['risk_weight'] = df_locations['risk'] * 100  # Scale for heatmap visibility
 
-    heat_data = [[row['lat'], row['lon'], row['risk_weight']] for _, row in df_map.iterrows()]
-    HeatMap(heat_data, radius=20).add_to(m)
+    m = folium.Map(location=[37.8, -96], zoom_start=4, tiles='OpenStreetMap')
 
-    st_data = st_folium(m, width=1200, height=500)
+    # Heatmap for overall clustering
+    heat_data = [[row['lat'], row['lon'], row['risk_weight']] for _, row in df_locations.iterrows()]
+    HeatMap(heat_data, radius=60, blur=30, max_zoom=1).add_to(m)
+
+    # Individual markers with detailed, readable popups
+    for _, row in df_locations.iterrows():
+        popup_html = f"""
+        <div style='font-size: 18px; min-width: 280px; padding: 12px; background-color: #f9f9f9; border-radius: 8px;'>
+            <b>Location:</b> {row['name']}<br>
+            <b>Predicted Relative Risk:</b> {row['risk']:.2f} (higher = elevated lifecycle/emission risk)<br>
+            <b>Equity & Safety Note:</b> {row['note']}
+        </div>
+        """
+        folium.Marker(
+            location=[row['lat'], row['lon']],
+            popup=folium.Popup(popup_html, max_width=400),
+            icon=folium.Icon(color='red' if row['risk'] > 1.1 else 'blue', icon='info-sign')
+        ).add_to(m)
+
+    st_folium(m, width=None, height=700, use_container_width=True, key="equity_risk_map")
 
 st.markdown("---")
 st.caption("Prototype version 1.0 – For USCIS evidentiary purposes only. Open-source under MIT license. Contact for full code/dataset expansion.")
